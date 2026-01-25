@@ -147,7 +147,7 @@ app = Dash(__name__)
 
 app.layout = html.Div([
     html.H2("Specusol"),
-    html.P("Disclaimer: This website provides a dynamic visualization of solar energy data, including supply and demand in Texas, alongside real-time solar stock ETF pricing."),
+    html.P("Disclaimer: Specusol is an information service. Information is for educational purposes only and it not intended to be used as investment advice."),
 
     html.Hr(),  # Divider
 
