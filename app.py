@@ -170,10 +170,7 @@ app.layout = html.Div([
                             "fillOpacity": 0.25
                         }
                     ),
-                    dl.Marker(
-                        id="marker",
-                        position=[30.26, -97.74]
-                    )
+                    
                 ]
             ),
         ], style={"width": "48%", "display": "inline-block", "padding": "0 2%"}),
@@ -214,22 +211,17 @@ def update_coords(clickData):
     lat = clickData["latlng"]["lat"]
     lon = clickData["latlng"]["lng"]
     return lat, lon, [lat, lon]
-
 @app.callback(
-    Output("lat", "value"),
-    Output("lon", "value"),
-    Output("marker", "position"),
+    Output("chart", "figure"),
     Input("map", "clickData")
 )
-def update_coords(clickData):
+def update_chart(clickData):
     if clickData is None:
-        lat, lon = 30.26, -97.74
-        return lat, lon, [lat, lon]
+        return build_figure(30.26, -97.74)
 
     lat = clickData["latlng"]["lat"]
     lon = clickData["latlng"]["lng"]
-    return lat, lon, [lat, lon]
-
+    return build_figure(lat, lon)
 
 # ------------------------------
 # RUN (RENDER)
