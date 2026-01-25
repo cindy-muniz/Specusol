@@ -216,16 +216,20 @@ def update_coords(clickData):
     return lat, lon, [lat, lon]
 
 @app.callback(
-    Output("chart", "figure"),
+    Output("lat", "value"),
+    Output("lon", "value"),
+    Output("marker", "position"),
     Input("map", "clickData")
 )
-def update_chart(clickData):
+def update_coords(clickData):
     if clickData is None:
-        return build_figure(30.26, -97.74)
+        lat, lon = 30.26, -97.74
+        return lat, lon, [lat, lon]
 
     lat = clickData["latlng"]["lat"]
     lon = clickData["latlng"]["lng"]
-    return build_figure(lat, lon)
+    return lat, lon, [lat, lon]
+
 
 # ------------------------------
 # RUN (RENDER)
