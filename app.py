@@ -1,10 +1,8 @@
 from dash import Dash, html, dcc, Input, Output
 import dash_leaflet as dl
-import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-import yfinance as yf
 from datetime import datetime
+import plotly.graph_objects as go
 
 # ------------------------------
 # ERCOT ZONES (SIMPLIFIED GEOJSON)
@@ -25,7 +23,8 @@ ercot_zones = {
          "geometry":{"type":"Polygon","coordinates":[[[-96,31],[-94,31],[-94,29],[-96,29],[-96,31]]]}},
 
         {"type":"Feature","properties":{"zone":"Coastal"},
-         "geometry":{"type":"Polygon","coordinates":[[[-98,29],[-94,29],[-94,26],[-98,26],[-98,29]]]}},
+         "geometry":{"type":"Polygon","coordinates":[[[-98,29],[-94,29],[-94,26],[-98,26],[-98,29]]]}}
+
     ]
 }
 
@@ -48,7 +47,7 @@ def get_solar_supply(lat, lon):
     })
 
 # ------------------------------
-# FIGURE BUILDER
+# FIGURE BUILDER (same as before)
 # ------------------------------
 def build_figure(lat, lon):
     df = get_solar_supply(lat, lon)
@@ -112,102 +111,56 @@ def build_figure(lat, lon):
     return fig
 
 # ------------------------------
-# SOLAR STOCK ETF (Using yfinance)
-# ------------------------------
-def get_solar_etf():
-    etf = yf.Ticker("TAN")  # Example: Invesco Solar ETF (TAN)
-    data = etf.history(period="7d")  # Get last 7 days of data
-    return data
-
-# ------------------------------
 # DASH APP
 # ------------------------------
 app = Dash(__name__)
 
 app.layout = html.Div([
-    # Homepage
-    html.Div(id="home", children=[
-        html.H1("Specusol"),
-        html.P("Welcome to the Specusol platform! We focus on solar energy data and the Texas energy market."),
-        html.P("Disclaimer: This website is for educational and informational purposes only."),
-        html.Br(),
-        html.P("Please explore the interactive map and charts to get real-time solar energy data."),
-        html.Br(),
-        html.Hr(),
-    ]),
+    html.H2("Specusol - Texas Solar Dashboard"),
 
-    # Main Page: Map + Chart
     html.Div([
+        "Disclaimer: This is a mock dashboard to visualize Texas solar energy supply and demand data. It does not provide real-time data and is for educational purposes only."
+    ], style={"fontStyle": "italic", "marginBottom": "20px"}),
 
-        # Map and Chart Layout
-        html.Div([
-
-            # Map Section (ERCOT Zones)
-            dl.Map(
-                id="map",
-                center=[31, -100],
-                zoom=6,
-                style={"height": "420px"},
-                children=[
-                    dl.TileLayer(),
-                    dl.GeoJSON(
-                        data=ercot_zones,
-                        style={
-                            "fillColor": "#1f77b4",
-                            "color": "black",
-                            "weight": 1,
-                            "fillOpacity": 0.25
-                        }
-                    ),
-                    dl.Marker(
-                        id="marker",
-                        position=[30.26, -97.74]
-                    )
-                ]
+    html.H3("ERCOT Zones (Interactive Map)"),
+    dl.Map(
+        id="map",
+        center=[31, -100],
+        zoom=6,
+        style={"height": "420px"},
+        children=[
+            dl.TileLayer(),
+            dl.GeoJSON(
+                data=ercot_zones,
+                style={
+                    "fillColor": "#1f77b4",
+                    "color": "black",
+                    "weight": 1,
+                    "fillOpacity": 0.25
+                }
             ),
-        ], style={"display": "flex", "justifyContent": "space-between"}),
-
-        html.Div([
-
-            # Latitude and Longitude Input
-            html.Div([
-                "Latitude:",
-                dcc.Input(id="lat", value=30.26, type="number", step=0.001),
-                "Longitude:",
-                dcc.Input(id="lon", value=-97.74, type="number", step=0.001)
-            ], style={"marginTop": "10px"}),
-
-            # Solar Supply and Demand Chart
-            dcc.Graph(
-                id="chart",
-                figure=build_figure(30.26, -97.74)
+            dl.Marker(
+                id="marker",
+                position=[30.26, -97.74]
             )
-        ], style={"width": "45%"}),
+        ]
+    ),
 
-    ], style={"display": "flex", "justifyContent": "space-between"}),
+    html.Div([
+        "Latitude:",
+        dcc.Input(id="lat", value=30.26, type="number", step=0.001),
+        "Longitude:",
+        dcc.Input(id="lon", value=-97.74, type="number", step=0.001)
+    ], style={"marginTop": "10px"}),
 
-    # Solar ETF Page (finances)
-    html.Div(id="finances", children=[
-        html.H3("Solar Stock ETF (TAN)"),
-        dcc.Graph(
-            id="solar-etf-chart",
-            figure={
-                "data": [
-                    {
-                        "x": get_solar_etf().index,
-                        "y": get_solar_etf()["Close"],
-                        "type": "line",
-                        "name": "TAN",
-                    },
-                ],
-                "layout": {
-                    "title": "Invesco Solar ETF (TAN) - Last 7 Days",
-                    "xaxis": {"title": "Date"},
-                    "yaxis": {"title": "Price (USD)"},
-                },
-            },
-        ),
-    ])
+    dcc.Graph(
+        id="chart",
+        figure=build_figure(30.26, -97.74)
+    ),
+
+    # Solar Stock ETF Graph
+    html.H3("Solar Stock ETF"),
+    dcc.Graph(id="solar-stock-chart")
 ])
 
 # ------------------------------
@@ -235,6 +188,41 @@ def update_coords(clickData):
 )
 def update_chart(lat, lon):
     return build_figure(lat, lon)
+
+@app.callback(
+    Output("solar-stock-chart", "figure"),
+    Input("lat", "value"),  # Keeping this just in case
+    Input("lon", "value")
+)
+def update_solar_stock_chart(lat, lon):
+    import yfinance as yf
+
+    # Solar ETF Stock symbol (example: TAN, the Invesco Solar ETF)
+    symbol = "TAN"
+
+    # Download the data
+    stock_data = yf.download(symbol, period="1mo", interval="1d")
+
+    # Create the plot
+    fig = go.Figure()
+
+    fig.add_trace(go.Candlestick(
+        x=stock_data.index,
+        open=stock_data['Open'],
+        high=stock_data['High'],
+        low=stock_data['Low'],
+        close=stock_data['Close'],
+        name="Solar ETF"
+    ))
+
+    fig.update_layout(
+        title="Solar Stock ETF Performance (TAN)",
+        xaxis_title="Date",
+        yaxis_title="Price ($)",
+        template="plotly_white"
+    )
+
+    return fig
 
 # ------------------------------
 # RUN (RENDER)
