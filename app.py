@@ -1,8 +1,10 @@
 from dash import Dash, html, dcc, Input, Output
 import dash_leaflet as dl
+import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.graph_objects as go
+import yfinance as yf
 
 # ------------------------------
 # ERCOT ZONES (SIMPLIFIED GEOJSON)
@@ -29,39 +31,35 @@ ercot_zones = {
 }
 
 # ------------------------------
-# SOLAR SUPPLY MODEL (no pandas now)
+# SOLAR SUPPLY MODEL
 # ------------------------------
 def get_solar_supply(lat, lon):
-    # Create timestamps without pandas (just use datetime and timedelta)
-    timestamps = [datetime.now() + timedelta(hours=i) for i in range(168)]
+    timestamps = pd.date_range(datetime.now(), periods=168, freq="h")
 
-    ghi = np.maximum(0, 1000 * np.sin([(timestamp.hour - 6) / 12 * np.pi for timestamp in timestamps]))
+    ghi = np.maximum(0, 1000 * np.sin((timestamps.hour - 6) / 12 * np.pi))
     cloud = 1 - np.random.uniform(0, 0.25, len(timestamps))
 
     res_kw = ghi * cloud * (10000 * 0.18 / 1000)
     comm_kw = ghi * cloud * (50000 * 0.18 * 0.75 / 1000)
 
-    # Return the results as a list of dictionaries instead of a pandas DataFrame
-    return {
+    return pd.DataFrame({
         "timestamp": timestamps,
         "res_supply": res_kw,
         "comm_supply": comm_kw
-    }
+    })
 
 # ------------------------------
-# FIGURE BUILDER (updated to avoid pandas)
+# FIGURE BUILDER (SUPPLY, DEMAND & TOU)
 # ------------------------------
 def build_figure(lat, lon):
-    data = get_solar_supply(lat, lon)
+    df = get_solar_supply(lat, lon)
 
-    # Convert the timestamps to hours for the plot
-    hours = [timestamp.hour for timestamp in data["timestamp"]]
+    res_demand = df.res_supply * np.random.uniform(0.7, 1.0, len(df))
+    comm_demand = df.comm_supply * np.random.uniform(0.7, 1.0, len(df))
 
-    res_demand = data["res_supply"] * np.random.uniform(0.7, 1.0, len(data["res_supply"]))
-    comm_demand = data["comm_supply"] * np.random.uniform(0.7, 1.0, len(data["comm_supply"]))
-
+    hour = df.timestamp.dt.hour
     tou_price = np.select(
-        [np.array(hours) < 6, np.array(hours) < 14, np.array(hours) < 20, np.array(hours) < 22],
+        [hour < 6, hour < 14, hour < 20, hour < 22],
         [0.07, 0.11, 0.22, 0.13],
         default=0.07
     )
@@ -69,31 +67,31 @@ def build_figure(lat, lon):
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
-        x=data["timestamp"], y=data["res_supply"],
+        x=df.timestamp, y=df.res_supply,
         name="Residential Supply",
         line=dict(color="orange")
     ))
 
     fig.add_trace(go.Scatter(
-        x=data["timestamp"], y=res_demand,
+        x=df.timestamp, y=res_demand,
         name="Residential Demand",
         line=dict(color="red", dash="dash")
     ))
 
     fig.add_trace(go.Scatter(
-        x=data["timestamp"], y=data["comm_supply"],
+        x=df.timestamp, y=df.comm_supply,
         name="Commercial Supply",
         line=dict(color="blue")
     ))
 
     fig.add_trace(go.Scatter(
-        x=data["timestamp"], y=comm_demand,
+        x=df.timestamp, y=comm_demand,
         name="Commercial Demand",
         line=dict(color="navy", dash="dash")
     ))
 
     fig.add_trace(go.Scatter(
-        x=data["timestamp"], y=tou_price,
+        x=df.timestamp, y=tou_price,
         name="TOU Price ($/kWh)",
         yaxis="y2",
         line=dict(color="black")
@@ -115,56 +113,88 @@ def build_figure(lat, lon):
     return fig
 
 # ------------------------------
+# SOLAR STOCK ETF GRAPH (TAN)
+# ------------------------------
+def get_solar_etf():
+    # Retrieve real-time data for the solar stock ETF (TAN)
+    tan = yf.Ticker("TAN")
+    df = tan.history(period="5d", interval="1h")
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Candlestick(
+        x=df.index,
+        open=df["Open"],
+        high=df["High"],
+        low=df["Low"],
+        close=df["Close"],
+        name="TAN Stock Price"
+    ))
+
+    fig.update_layout(
+        title="Real-Time Solar Stock ETF (TAN)",
+        xaxis_title="Time",
+        yaxis_title="Price (USD)",
+        template="plotly_white"
+    )
+
+    return fig
+
+# ------------------------------
 # DASH APP
 # ------------------------------
 app = Dash(__name__)
 
 app.layout = html.Div([
-    html.H2("Specusol - Texas Solar Dashboard"),
+    html.H2("Specusol"),
+    html.P("Disclaimer: This website provides a dynamic visualization of solar energy data, including supply and demand in Texas, alongside real-time solar stock ETF pricing."),
 
+    html.Hr(),  # Divider
+
+    # Map and Solar Chart (left and right side)
     html.Div([
-        "Disclaimer: This is a mock dashboard to visualize Texas solar energy supply and demand data. It does not provide real-time data and is for educational purposes only."
-    ], style={"fontStyle": "italic", "marginBottom": "20px"}),
-
-    html.H3("ERCOT Zones (Interactive Map)"),
-    dl.Map(
-        id="map",
-        center=[31, -100],
-        zoom=6,
-        style={"height": "420px"},
-        children=[
-            dl.TileLayer(),
-            dl.GeoJSON(
-                data=ercot_zones,
-                style={
-                    "fillColor": "#1f77b4",
-                    "color": "black",
-                    "weight": 1,
-                    "fillOpacity": 0.25
-                }
+        html.Div([
+            dl.Map(
+                id="map",
+                center=[31, -100],
+                zoom=6,
+                style={"height": "420px"},
+                children=[
+                    dl.TileLayer(),
+                    dl.GeoJSON(
+                        data=ercot_zones,
+                        style={
+                            "fillColor": "#1f77b4",
+                            "color": "black",
+                            "weight": 1,
+                            "fillOpacity": 0.25
+                        }
+                    ),
+                    dl.Marker(
+                        id="marker",
+                        position=[30.26, -97.74]
+                    )
+                ]
             ),
-            dl.Marker(
-                id="marker",
-                position=[30.26, -97.74]
+        ], style={"width": "48%", "display": "inline-block", "padding": "0 2%"}),
+
+        html.Div([
+            dcc.Graph(
+                id="chart",
+                figure=build_figure(30.26, -97.74)
             )
-        ]
-    ),
+        ], style={"width": "48%", "display": "inline-block"}),
 
-    html.Div([
-        "Latitude:",
-        dcc.Input(id="lat", value=30.26, type="number", step=0.001),
-        "Longitude:",
-        dcc.Input(id="lon", value=-97.74, type="number", step=0.001)
-    ], style={"marginTop": "10px"}),
-
-    dcc.Graph(
-        id="chart",
-        figure=build_figure(30.26, -97.74)
-    ),
+    ]),
 
     # Solar Stock ETF Graph
-    html.H3("Solar Stock ETF"),
-    dcc.Graph(id="solar-stock-chart")
+    html.Div([
+        dcc.Graph(
+            id="solar-etf",
+            figure=get_solar_etf()
+        )
+    ], style={"marginTop": "20px"})
+
 ])
 
 # ------------------------------
@@ -193,44 +223,8 @@ def update_coords(clickData):
 def update_chart(lat, lon):
     return build_figure(lat, lon)
 
-@app.callback(
-    Output("solar-stock-chart", "figure"),
-    Input("lat", "value"),  # Keeping this just in case
-    Input("lon", "value")
-)
-def update_solar_stock_chart(lat, lon):
-    import yfinance as yf
-
-    # Solar ETF Stock symbol (example: TAN, the Invesco Solar ETF)
-    symbol = "TAN"
-
-    # Download the data
-    stock_data = yf.download(symbol, period="1mo", interval="1d")
-
-    # Create the plot
-    fig = go.Figure()
-
-    fig.add_trace(go.Candlestick(
-        x=stock_data.index,
-        open=stock_data['Open'],
-        high=stock_data['High'],
-        low=stock_data['Low'],
-        close=stock_data['Close'],
-        name="Solar ETF"
-    ))
-
-    fig.update_layout(
-        title="Solar Stock ETF Performance (TAN)",
-        xaxis_title="Date",
-        yaxis_title="Price ($)",
-        template="plotly_white"
-    )
-
-    return fig
-
 # ------------------------------
 # RUN (RENDER)
 # ------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8050)
-
