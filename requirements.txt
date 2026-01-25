@@ -4,3 +4,4 @@ dash-leaflet>=0.0.23
 plotly>=5.18.0
 numpy>=1.26
 gunicorn>=20.1.0
+yfinance>=0.1.70
