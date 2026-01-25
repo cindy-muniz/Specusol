@@ -1,7 +1,7 @@
 from dash import Dash, html, dcc, Input, Output
 import dash_leaflet as dl
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
 # ------------------------------
@@ -29,35 +29,39 @@ ercot_zones = {
 }
 
 # ------------------------------
-# SOLAR SUPPLY MODEL
+# SOLAR SUPPLY MODEL (no pandas now)
 # ------------------------------
 def get_solar_supply(lat, lon):
-    timestamps = pd.date_range(datetime.now(), periods=168, freq="h")
+    # Create timestamps without pandas (just use datetime and timedelta)
+    timestamps = [datetime.now() + timedelta(hours=i) for i in range(168)]
 
-    ghi = np.maximum(0, 1000 * np.sin((timestamps.hour - 6) / 12 * np.pi))
+    ghi = np.maximum(0, 1000 * np.sin([(timestamp.hour - 6) / 12 * np.pi for timestamp in timestamps]))
     cloud = 1 - np.random.uniform(0, 0.25, len(timestamps))
 
     res_kw = ghi * cloud * (10000 * 0.18 / 1000)
     comm_kw = ghi * cloud * (50000 * 0.18 * 0.75 / 1000)
 
-    return pd.DataFrame({
+    # Return the results as a list of dictionaries instead of a pandas DataFrame
+    return {
         "timestamp": timestamps,
         "res_supply": res_kw,
         "comm_supply": comm_kw
-    })
+    }
 
 # ------------------------------
-# FIGURE BUILDER (same as before)
+# FIGURE BUILDER (updated to avoid pandas)
 # ------------------------------
 def build_figure(lat, lon):
-    df = get_solar_supply(lat, lon)
+    data = get_solar_supply(lat, lon)
 
-    res_demand = df.res_supply * np.random.uniform(0.7, 1.0, len(df))
-    comm_demand = df.comm_supply * np.random.uniform(0.7, 1.0, len(df))
+    # Convert the timestamps to hours for the plot
+    hours = [timestamp.hour for timestamp in data["timestamp"]]
 
-    hour = df.timestamp.dt.hour
+    res_demand = data["res_supply"] * np.random.uniform(0.7, 1.0, len(data["res_supply"]))
+    comm_demand = data["comm_supply"] * np.random.uniform(0.7, 1.0, len(data["comm_supply"]))
+
     tou_price = np.select(
-        [hour < 6, hour < 14, hour < 20, hour < 22],
+        [np.array(hours) < 6, np.array(hours) < 14, np.array(hours) < 20, np.array(hours) < 22],
         [0.07, 0.11, 0.22, 0.13],
         default=0.07
     )
@@ -65,31 +69,31 @@ def build_figure(lat, lon):
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
-        x=df.timestamp, y=df.res_supply,
+        x=data["timestamp"], y=data["res_supply"],
         name="Residential Supply",
         line=dict(color="orange")
     ))
 
     fig.add_trace(go.Scatter(
-        x=df.timestamp, y=res_demand,
+        x=data["timestamp"], y=res_demand,
         name="Residential Demand",
         line=dict(color="red", dash="dash")
     ))
 
     fig.add_trace(go.Scatter(
-        x=df.timestamp, y=df.comm_supply,
+        x=data["timestamp"], y=data["comm_supply"],
         name="Commercial Supply",
         line=dict(color="blue")
     ))
 
     fig.add_trace(go.Scatter(
-        x=df.timestamp, y=comm_demand,
+        x=data["timestamp"], y=comm_demand,
         name="Commercial Demand",
         line=dict(color="navy", dash="dash")
     ))
 
     fig.add_trace(go.Scatter(
-        x=df.timestamp, y=tou_price,
+        x=data["timestamp"], y=tou_price,
         name="TOU Price ($/kWh)",
         yaxis="y2",
         line=dict(color="black")
@@ -229,3 +233,4 @@ def update_solar_stock_chart(lat, lon):
 # ------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8050)
+
