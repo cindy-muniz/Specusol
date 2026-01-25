@@ -1,5 +1,6 @@
-dash
-dash-leaflet
-plotly
-pandas
-numpy
+dash==3.4.0
+dash-bootstrap-components>=2.0.0
+dash-leaflet>=0.0.23
+plotly>=5.18.0
+numpy>=1.26
+gunicorn>=20.1.0
