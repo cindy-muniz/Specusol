@@ -19,7 +19,7 @@
 
 ## About this repo
 
-During the 24-hour hackathon, Jenna and I each built in our own repository, then merged our
+During the 36-hour hackathon, Jenna and I each built in our own repository, then merged our
 features into the final deployed version ([EnergyHack2026](https://github.com/cindy-muniz/EnergyHack2026)).
 This repo holds the parts I built:
 
